@@ -343,7 +343,7 @@ app.get("/choose", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+    res.type("text/plain").send("JOEL QR server is running.");
 });
 
 app.listen(PORT, () => {
