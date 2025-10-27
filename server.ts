@@ -16,16 +16,29 @@ type FollowType = "people" | "function_tag" | "organisation";
 
 const app = express();
 
-const { APP_DOMAIN, PORT, TELEGRAM_BOT_NAME, WHATSAPP_PHONE_NUMBER } =
-  process.env;
+const {
+  APP_DOMAIN,
+  PORT,
+  TELEGRAM_BOT_NAME,
+  WHATSAPP_PHONE_NUMBER,
+  MATRIX_BOT_USERNAME,
+} = process.env;
 
 if (APP_DOMAIN === undefined || PORT === undefined) {
   throw new Error("Missing APP_DOMAIN or PORT environment variables");
 }
 
-if (TELEGRAM_BOT_NAME === undefined || WHATSAPP_PHONE_NUMBER === undefined) {
+const telegramBotName = TELEGRAM_BOT_NAME ?? null;
+const whatsappPhoneNumber = WHATSAPP_PHONE_NUMBER ?? null;
+const matrixBotLink = MATRIX_BOT_LINK ?? null;
+
+const hasTelegram = telegramBotName !== null;
+const hasWhatsapp = whatsappPhoneNumber !== null;
+const hasMatrix = matrixBotLink !== null;
+
+if (!hasTelegram && !hasWhatsapp && !hasMatrix) {
   throw new Error(
-    "Missing TELEGRAM_BOT_NAME or WHATSAPP_PHONE_NUMBER environment variables",
+    "Missing messenger configuration. Set TELEGRAM_BOT_NAME, WHATSAPP_PHONE_NUMBER or MATRIX_BOT_LINK environment variables.",
   );
 }
 
@@ -43,6 +56,30 @@ const CHOOSE_PAGE_CONTENT = await fs.readFile(
   path.join(__dirname, "choose.html"),
   "utf8",
 );
+
+const WHATSAPP_BLOCK = `      <a id="wa-link" class="app" href="{WHATSAPP_LINK}">
+        <img
+          src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/whatsapp.svg"
+          alt=""
+        />
+        <span class="label">WhatsApp</span>
+      </a>`;
+
+const TELEGRAM_BLOCK = `      <a id="tg-link" class="app" href="{TELEGRAM_LINK}">
+        <img
+          src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/telegram.svg"
+          alt=""
+        />
+        <span class="label">Telegram</span>
+      </a>`;
+
+const MATRIX_BLOCK = `      <a id="mx-link" class="app" href="{MATRIX_LINK}">
+        <img
+          src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/matrix.svg"
+          alt=""
+        />
+        <span class="label">Matrix</span>
+      </a>`;
 
 const APP_URL = `http://${APP_DOMAIN}`;
 const FRAME_PATH = path.join(__dirname, "frame.png");
@@ -344,9 +381,6 @@ app.get("/choose", async (req, res) => {
     // Show the display name
     content = content.replace("{BASE_URL}", APP_URL);
 
-    const telegram_base_URL = `https://t.me/${TELEGRAM_BOT_NAME}?text=`;
-    const whatsapp_base_URL = `https://wa.me/${WHATSAPP_PHONE_NUMBER}?text=Bonjour JOEL ! `;
-
     let startCommand = "";
 
     switch (followType) {
@@ -367,14 +401,36 @@ app.get("/choose", async (req, res) => {
         await umami.log({ event: "/choose-app-default" });
     }
 
+    const telegramCommand = startCommand.replace("Suivre", "Rechercher"); // flow is prettier with "Rechercher"
+
     content = content.replace(
-      "{WHATSAPP_LINK}",
-      encodeURI(whatsapp_base_URL + startCommand),
+      "{WHATSAPP_BLOCK}",
+      hasWhatsapp ? WHATSAPP_BLOCK : "",
     );
     content = content.replace(
-      "{TELEGRAM_LINK}",
-      encodeURI(telegram_base_URL + startCommand),
+      "{TELEGRAM_BLOCK}",
+      hasTelegram ? TELEGRAM_BLOCK : "",
     );
+    content = content.replace("{MATRIX_BLOCK}", hasMatrix ? MATRIX_BLOCK : "");
+
+    if (whatsappPhoneNumber !== null) {
+      const whatsappLink = encodeURI(
+        `https://wa.me/${whatsappPhoneNumber}?text=Bonjour JOEL! ${startCommand}`,
+      );
+      content = content.replace("{WHATSAPP_LINK}", whatsappLink);
+    }
+
+    if (telegramBotName !== null) {
+      const telegramLink = encodeURI(
+        `https://t.me/${telegramBotName}?text=${telegramCommand}`,
+      );
+      content = content.replace("{TELEGRAM_LINK}", telegramLink);
+    }
+
+    if (matrixBotLink !== null) {
+      const matrixLink = encodeURI(`${matrixBotLink}${startCommand}`);
+      content = content.replace("{MATRIX_LINK}", matrixLink);
+    }
 
     res.type("html").send(content);
   } catch (err) {

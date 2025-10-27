@@ -5,10 +5,10 @@ import tseslint from "typescript-eslint";
 import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 import prettierConfig from "eslint-config-prettier";
 
-export default [
+export default tseslint.config(
   eslint.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
-  ...tseslint.configs.stylisticTypeChecked,
+  tseslint.configs.strictTypeChecked,
+  tseslint.configs.stylisticTypeChecked,
   {
     languageOptions: {
       parserOptions: {
@@ -20,4 +20,4 @@ export default [
   },
   prettierConfig,
   eslintPluginPrettierRecommended,
-];
+);
