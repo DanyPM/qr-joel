@@ -30,6 +30,8 @@
       .apps {
         display: flex;
         gap: 2rem;
+        flex-wrap: wrap;
+        justify-content: center;
       }
 
       .app {
@@ -78,22 +80,10 @@
 
     <h1 id="title">Ouvrez votre application de messagerie préférée pour suivre {FOLLOW_LABEL}</h1>
 
-  <div class="apps">
-      <a id="wa-link" class="app" href="{WHATSAPP_LINK}">
-        <img
-          src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/whatsapp.svg"
-          alt=""
-        />
-        <span class="label">WhatsApp</span>
-      </a>
-
-      <a id="tg-link" class="app" href="{TELEGRAM_LINK}">
-        <img
-          src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/telegram.svg"
-          alt=""
-        />
-        <span class="label">Telegram</span>
-      </a>
+    <div class="apps">
+      {WHATSAPP_BLOCK}
+      {TELEGRAM_BLOCK}
+      {MATRIX_BLOCK}
     </div>
 
   </body>
