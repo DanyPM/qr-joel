@@ -30,7 +30,7 @@ if (APP_DOMAIN === undefined || PORT === undefined) {
 
 const telegramBotName = TELEGRAM_BOT_NAME ?? null;
 const whatsappPhoneNumber = WHATSAPP_PHONE_NUMBER ?? null;
-const matrixBotLink = MATRIX_BOT_LINK ?? null;
+const matrixBotLink = MATRIX_BOT_USERNAME ?? null;
 
 const hasTelegram = telegramBotName !== null;
 const hasWhatsapp = whatsappPhoneNumber !== null;
@@ -81,7 +81,7 @@ const MATRIX_BLOCK = `      <a id="mx-link" class="app" href="{MATRIX_LINK}">
         <span class="label">Matrix</span>
       </a>`;
 
-const APP_URL = `http://${APP_DOMAIN}`;
+const APP_URL = `https://${APP_DOMAIN}`;
 const FRAME_PATH = path.join(__dirname, "frame.png");
 const FONT_PATH = path.join(__dirname, "DejaVuSans-Bold.ttf");
 const FONT_BASE64 = await fs.readFile(FONT_PATH, { encoding: "base64" });
@@ -444,8 +444,7 @@ app.get("/", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 App running at APP_URL`);
-  console.log(`📱 Try: ${APP_URL}/choose`);
+  console.log(`📱 Try: ${APP_URL}:${PORT}/choose`);
 });
 
 console.log(`QR: JOEL gateway started successfully \u{2705}`);
