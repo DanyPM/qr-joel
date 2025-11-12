@@ -75,42 +75,82 @@ if (
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CHOOSE_PAGE_CONTENT = await fs.readFile(
-  path.join(__dirname, "choose.html"),
+const INDEX_PAGE_CONTENT = await fs.readFile(
+  path.join(__dirname, "main.html"),
   "utf8",
 );
 
-const WHATSAPP_BLOCK = `      <a id="wa-link" class="app" href="{WHATSAPP_LINK}">
-        <img
-          src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"
-          alt=""
-        />
-        <span class="label">WhatsApp</span>
-      </a>`;
+const WHATSAPP_BLOCK = `<div class="rounded-md shadow">
+                  <a
+                    id="wa-link"
+                    class="app"
+                    href="{WHATSAPP_LINK}"
+                    aria-label="WhatsApp"
+                  >
+                    <img
+                      src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"
+                      alt=""
+                      class="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      draggable="false"
+                    />
+                  </a>
+                </div>`;
 
-const TELEGRAM_BLOCK = `      <a id="tg-link" class="app" href="{TELEGRAM_LINK}">
-        <img
-          src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
-          alt=""
-        />
-        <span class="label">Telegram</span>
-      </a>`;
+const TELEGRAM_BLOCK = `<div class="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
+                  <a
+                    id="tg-link"
+                    class="app"
+                    href="{TELEGRAM_LINK}"
+                    aria-label="Telegram"
+                  >
+                    <img
+                      src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
+                      alt=""
+                      class="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      draggable="false"
+                    />
+                  </a>
+                </div>`;
 
-const MATRIX_BLOCK = `      <a id="mx-link" class="app" href="{MATRIX_LINK}">
-        <img
-          src="https://upload.wikimedia.org/wikipedia/commons/1/13/Element_%28software%29_logo_%282024%29.svg"
-          alt=""
-        />
-        <span class="label">Matrix</span>
-      </a>`;
+const MATRIX_BLOCK = ` <div class="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
+                  <a
+                    id="mx-link"
+                    class="app"
+                    href="{MATRIX_LINK}"
+                    aria-label="Matrix"
+                  >
+                    <img
+                      src="https://upload.wikimedia.org/wikipedia/commons/1/13/Element_%28software%29_logo_%282024%29.svg"
+                      alt=""
+                      class="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      draggable="false"
+                    />
+                  </a>
+                </div>`;
 
-const TCHAP_BLOCK = `      <a id="mx-link" class="app" href="{TCHAP_LINK}">
-        <img
-          src="https://www.tchap.gouv.fr/themes/tchap/img/logos/tchap-logo.svg"
-          alt=""
-        />
-        <span class="label">Matrix</span>
-      </a>`;
+const TCHAP_BLOCK = `<div class="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
+                  <a
+                    id="tc-link"
+                    class="app"
+                    href="{TCHAP_LINK}"
+                    aria-label="Tchap"
+                  >
+                    <img
+                      src="https://www.tchap.gouv.fr/themes/tchap/img/logos/tchap-logo.svg"
+                      alt=""
+                      class="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      draggable="false"
+                    />
+                  </a>
+                </div>`;
 
 const APP_URL = `http${isDev ? "" : "s"}://${APP_DOMAIN}`;
 const APP_URL_WITH_PORT = `${APP_URL}:${String(appPort)}`;
@@ -250,6 +290,7 @@ app.get("/qrcode", async (req, res) => {
         }
         qr_url = `${APP_URL_WITH_PORT}?&function_tag=${function_tag}`;
         followLabel = function_tag;
+        // TODO: functionTag to label
         break;
       }
     }
@@ -337,26 +378,11 @@ app.get("/qrcode", async (req, res) => {
 
 app.get("/", async (req, res) => {
   try {
-    let content = CHOOSE_PAGE_CONTENT;
-
-    const paramsNames = [
-      "name",
-      "organisation",
-      "function_tag",
-      "people",
-      "verify",
-    ];
-
-    const paramsWithValues: string[] = [];
-    paramsNames.forEach((param) => {
-      const paramValue = (req.query[param] ?? "") as string;
-      if (paramValue.length > 0)
-        paramsWithValues.push(`${param}=${paramValue}`);
-    });
-    paramsWithValues.push("frame=false");
+    let content = INDEX_PAGE_CONTENT;
 
     let followType: FollowType | undefined;
     let followArg = null; // to be sent to the start command
+    let followLabel = null;
 
     let qr_url: string | null = null;
 
@@ -382,6 +408,7 @@ app.get("/", async (req, res) => {
         followArg = `${JORFResult[0].prenom} ${JORFResult[0].nom}`;
         qr_url = APP_URL_WITH_PORT_QR + "?name=" + followArg;
       }
+      followLabel = followArg;
     }
 
     if (req.query.organisation_id != undefined) {
@@ -409,6 +436,7 @@ app.get("/", async (req, res) => {
             .status(400)
             .json({ error: "Too many results found on JORFSearch." });
         followArg = JORFResult[0].id;
+        followLabel = JORFResult[0].name;
       }
       followType = "organisation";
 
@@ -422,32 +450,51 @@ app.get("/", async (req, res) => {
           error:
             "Parameters people, function_tag and organisations are exclusive.",
         });
+      if (verifyOnJORFSearch) {
+        const JORFResult = await callJORFSearchTag(followArg);
+        if (JORFResult.length === 0)
+          return res
+            .status(400)
+            .json({ error: "No result found on JORFSearch." });
+      }
       followType = "function_tag";
       qr_url = APP_URL_WITH_PORT_QR + "?function_tag=" + followArg;
+      // TODO: functionTag to label
     }
 
-    if (!qr_url)
-      return res.status(400).json({
-        error: "qr_url not initialized",
-      });
-    content = content.replace("{QR_URL}", encodeURI(qr_url + "&frame=false"));
-
     // Hide the QR code if already on mobile
-    const isMobile =
+    let isMobile =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
         req.get("user-agent") ?? "",
       );
-    content = content.replace("{HIDDEN_QR}", isMobile ? "hidden" : "");
+
+    if (!qr_url) {
+      if (isDev) {
+        isMobile = true;
+        followLabel = "Sample label";
+      } else {
+        res.redirect(encodeURI(APP_URL));
+        return;
+      }
+    }
+
+    if (isMobile && qr_url)
+      content = content.replace(
+        "{QRCODE_BLOCK}",
+        `
+          <div
+              class="max-w-md mx-auto mt-5 sm:flex sm:justify-center md:mt-8"
+          >
+          <img id="qrcode" class="qrcode" alt="QR code" src=${encodeURI(qr_url + "&frame=false")} />
+              </div>`,
+      );
+    else content = content.replace("{QRCODE_BLOCK}", "");
+
+    if (followLabel == null)
+      return res.status(400).json({ error: "Follow label not found." });
 
     // Show the display name
-    content = content.replace(
-      "{FOLLOW_LABEL}",
-      followArg
-        ? `Suivez <b>${followArg}</b> sur votre messagerie préférée:`
-        : `Ouvrez 
-                <span class="text-blue-500 font-['Rampart_One']">JO</span><span class="text-red-500 font-['Rampart_One']">ÉL</span>
-               sur votre messagerie préférée:`,
-    );
+    content = content.replace("{FOLLOW_LABEL}", followLabel);
 
     // Show the display name
     content = content.replace("{BASE_URL}", APP_URL_WITH_PORT);
@@ -606,8 +653,10 @@ async function generateQrWithLogo(
   const logoMeta = await sharp(logoBuf).metadata();
 
   // 3) Center the logo directly onto the QR
-  const left = Math.floor((qrSize - logoMeta.width) / 2);
-  const top = Math.floor((qrSize - logoMeta.height) / 2);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const left = Math.floor((qrSize - logoMeta.width!) / 2);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const top = Math.floor((qrSize - logoMeta.height!) / 2);
 
   return await sharp(qrBuffer)
     .composite([{ input: logoBuf, left, top }]) // no background
