@@ -299,7 +299,7 @@ app.get("/qrcode", async (req, res) => {
         error: "qr_url not initialized",
       });
 
-    const qrBuffer = await generateQrWithLogo(encodeURI(qr_url));
+    const qrBuffer = await generateQrWithLogo(qr_url);
 
     res.set("Content-Type", "image/png");
 
