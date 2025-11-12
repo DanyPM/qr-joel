@@ -17,28 +17,30 @@ type FollowType = "people" | "function_tag" | "organisation";
 const app = express();
 
 const {
-  PORT,
   TELEGRAM_BOT_NAME,
-  WHATSAPP_BOT__PHONE_NUMBER,
+  WHATSAPP_BOT_PHONE_NUMBER,
   MATRIX_BOT_USERNAME,
   TCHAP_BOT_USERNAME,
 } = process.env;
 
 const isDev = process.env.NODE_ENV === "development";
 
-const HOME_WEBSITE_URL = "joel-officiel.fr";
-const APP_DOMAIN = isDev ? "localhost" : "links.joel-officiel.fr";
+const devPort = 8080;
 
-let appPort = PORT ? parseInt(PORT) : null;
-appPort ??= 3000;
+const PORT = isDev ? devPort : 443;
+
+const HOME_WEBSITE_URL = "https://joel-officiel.fr";
+const APP_URL = isDev
+  ? `http://localhost:${String(PORT)}`
+  : "https://links.joel-officiel.fr";
 
 const PAGE_TITLE_DEFAULT = "JOEL - Journal Electronique";
 const PAGE_TITLE_WITH_NAME = "Suivre {NAME} sur JOEL - Journal Electronique";
 
-const whatsappLinkBase = WHATSAPP_BOT__PHONE_NUMBER
-  ? `https://wa.me/${WHATSAPP_BOT__PHONE_NUMBER}?text=Bonjour JOEL!`
+const whatsappLinkBase = WHATSAPP_BOT_PHONE_NUMBER
+  ? `https://wa.me/${WHATSAPP_BOT_PHONE_NUMBER}?text=Bonjour JOEL!`
   : null;
-const hasWhatsapp = WHATSAPP_BOT__PHONE_NUMBER != null;
+const hasWhatsapp = WHATSAPP_BOT_PHONE_NUMBER != null;
 
 const telegramLinkBase = TELEGRAM_BOT_NAME
   ? `https://t.me/${TELEGRAM_BOT_NAME}?text=Bonjour JOEL!`
@@ -152,9 +154,7 @@ const TCHAP_BLOCK = `<div class="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
                   </a>
                 </div>`;
 
-const APP_URL = `http${isDev ? "" : "s"}://${APP_DOMAIN}`;
-const APP_URL_WITH_PORT = `${APP_URL}:${String(appPort)}`;
-const APP_URL_WITH_PORT_QR = APP_URL_WITH_PORT + "/qrcode";
+const APP_URL_QR = APP_URL + "/qrcode";
 
 const FRAME_PATH = path.join(__dirname, "frame.png");
 const FONT_PATH = path.join(__dirname, "DejaVuSans-Bold.ttf");
@@ -252,7 +252,7 @@ app.get("/qrcode", async (req, res) => {
             });
           prenomNom = `${JORFResult[0].prenom} ${JORFResult[0].nom}`;
         }
-        qr_url = `${APP_URL_WITH_PORT}?name=${prenomNom}`;
+        qr_url = `${APP_URL}?name=${prenomNom}`;
         followLabel = prenomNom;
         break;
       }
@@ -274,7 +274,7 @@ app.get("/qrcode", async (req, res) => {
             return res
               .status(400)
               .json({ error: "Too many results found on JORFSearch." });
-          qr_url = `${APP_URL_WITH_PORT}?&organisation=${organisation_id}`;
+          qr_url = `${APP_URL}?&organisation=${organisation_id}`;
           followLabel = JORFResult[0].name;
         }
         break;
@@ -288,7 +288,7 @@ app.get("/qrcode", async (req, res) => {
               .status(400)
               .json({ error: "No result found on JORFSearch." });
         }
-        qr_url = `${APP_URL_WITH_PORT}?&function_tag=${function_tag}`;
+        qr_url = `${APP_URL}?&function_tag=${function_tag}`;
         followLabel = function_tag;
         // TODO: functionTag to label
         break;
@@ -406,7 +406,7 @@ app.get("/", async (req, res) => {
             error: `No result found on JORFSearch for person "${followArg}".`,
           });
         followArg = `${JORFResult[0].prenom} ${JORFResult[0].nom}`;
-        qr_url = APP_URL_WITH_PORT_QR + "?name=" + followArg;
+        qr_url = APP_URL_QR + "?name=" + followArg;
       }
       followLabel = followArg;
     }
@@ -440,7 +440,7 @@ app.get("/", async (req, res) => {
       }
       followType = "organisation";
 
-      qr_url = APP_URL_WITH_PORT_QR + "?organisation=" + followArg;
+      qr_url = APP_URL_QR + "?organisation=" + followArg;
     }
 
     if (req.query.function_tag != undefined) {
@@ -458,7 +458,7 @@ app.get("/", async (req, res) => {
             .json({ error: "No result found on JORFSearch." });
       }
       followType = "function_tag";
-      qr_url = APP_URL_WITH_PORT_QR + "?function_tag=" + followArg;
+      qr_url = APP_URL_QR + "?function_tag=" + followArg;
       // TODO: functionTag to label
     }
 
@@ -473,7 +473,7 @@ app.get("/", async (req, res) => {
         isMobile = true;
         followLabel = "Sample label";
       } else {
-        res.redirect(encodeURI(APP_URL));
+        res.redirect(encodeURI(HOME_WEBSITE_URL));
         return;
       }
     }
@@ -497,7 +497,7 @@ app.get("/", async (req, res) => {
     content = content.replace("{FOLLOW_LABEL}", followLabel);
 
     // Show the display name
-    content = content.replace("{BASE_URL}", APP_URL_WITH_PORT);
+    content = content.replace("{BASE_URL}", APP_URL);
 
     content = content.replace(
       "{PAGE_TITLE}",
@@ -618,7 +618,7 @@ app.get("/status", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`📱 Try: ${APP_URL_WITH_PORT}`);
+  console.log(`📱 Try: ${APP_URL}`);
 });
 
 console.log(`QR: JOEL gateway started successfully \u{2705}`);
