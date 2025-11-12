@@ -305,7 +305,6 @@ app.get("/qrcode", async (req, res) => {
 
     if (!frameEnabled) {
       res.send(qrBuffer);
-      console.log("QR code generated successfully.");
       return;
     }
 
@@ -478,7 +477,7 @@ app.get("/", async (req, res) => {
       }
     }
 
-    if (isMobile && qr_url)
+    if (!isMobile && qr_url)
       content = content.replace(
         "{QRCODE_BLOCK}",
         `
