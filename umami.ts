@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const log = async (args: { event: UmamiEvent; data?: never }) => {
+export const log = async (args: { event: UmamiEvent; data?: object }) => {
   if (process.env.NODE_ENV === "development") {
     console.log("Umami event", args.event);
     return;
@@ -12,7 +12,7 @@ export const log = async (args: { event: UmamiEvent; data?: never }) => {
       hostname: process.env.UMAMI_HOST,
       website: process.env.UMAMI_ID,
       name: args.event,
-      data: args.data,
+      data: { ...args.data, messageApp: "qr-gateway" },
     },
     type: "event",
   };
@@ -35,12 +35,14 @@ export default {
 };
 
 export type UmamiEvent =
-  | "/qrcode-people"
-  | "/qrcode-organisation"
-  | "/qrcode-tag"
-  | "/gateway-people"
-  | "/gateway-organisation"
-  | "/gateway-tag"
+  | "/qr-people"
+  | "/qr-organisation"
+  | "/qr-tag"
+  | "/qr-default"
+  | "/link-people"
+  | "/link-organisation"
+  | "/link-tag"
+  | "/link-default"
   | "/jorfsearch-request-people"
   | "/jorfsearch-request-people-formatted"
   | "/jorfsearch-request-tag"

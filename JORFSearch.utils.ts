@@ -89,27 +89,6 @@ export async function callJORFSearchTag(
   return [];
 }
 
-export async function callJORFSearchOrganisation(
-  wikiId: WikidataId,
-): Promise<JORFSearchItem[]> {
-  try {
-    await umami.log({ event: "/jorfsearch-request-organisation" });
-    return await axios
-      .get<JORFSearchResponse>(
-        encodeURI(
-          `https://jorfsearch.steinertriples.ch/${wikiId.toUpperCase()}?format=JSON`,
-        ),
-      )
-      .then((res) => {
-        if (res.data === null || typeof res.data === "string") return [];
-        return cleanJORFItems(res.data);
-      });
-  } catch (error) {
-    console.log(error);
-  }
-  return [];
-}
-
 export function cleanPeopleNameJORFURL(input: string): string {
   if (!input) return "";
 
@@ -128,7 +107,7 @@ export function cleanPeopleNameJORFURL(input: string): string {
   return out;
 }
 
-export async function callJORFSearchOrganisationName(
+export async function callJORFSearchOrganisationByWikidataId(
   wikidataId: WikidataId,
 ): Promise<{ name: string; id: WikidataId }[]> {
   try {

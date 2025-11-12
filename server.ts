@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import sharp from "sharp";
 import { fileURLToPath } from "url";
 import {
-  callJORFSearchOrganisationName,
+  callJORFSearchOrganisationByWikidataId,
   callJORFSearchPeople,
   callJORFSearchTag,
 } from "./JORFSearch.utils.ts";
@@ -16,29 +16,163 @@ type FollowType = "people" | "function_tag" | "organisation";
 
 const app = express();
 
-const { APP_DOMAIN, PORT, TELEGRAM_BOT_NAME, WHATSAPP_PHONE_NUMBER } =
-  process.env;
+const {
+  TELEGRAM_BOT_NAME,
+  WHATSAPP_BOT_PHONE_NUMBER,
+  MATRIX_BOT_USERNAME,
+  TCHAP_BOT_USERNAME,
+} = process.env;
 
-if (APP_DOMAIN === undefined || PORT === undefined) {
-  throw new Error("Missing APP_DOMAIN or PORT environment variables");
+const isDev = process.env.NODE_ENV === "development";
+
+const devPort = 8080;
+
+const PORT = isDev ? devPort : 443;
+
+const HOME_WEBSITE_URL = "https://joel-officiel.fr";
+const APP_URL = isDev
+  ? `http://localhost:${String(PORT)}`
+  : "https://links.joel-officiel.fr";
+
+const PAGE_TITLE_DEFAULT = "JOEL - Journal Electronique";
+const PAGE_TITLE_WITH_NAME = "Suivre {NAME} sur JOEL - Journal Electronique";
+
+const whatsappLinkBase = WHATSAPP_BOT_PHONE_NUMBER
+  ? `https://wa.me/${WHATSAPP_BOT_PHONE_NUMBER}?text=Bonjour JOEL!`
+  : null;
+const hasWhatsapp = WHATSAPP_BOT_PHONE_NUMBER != null;
+
+const telegramLinkBase = TELEGRAM_BOT_NAME
+  ? `https://t.me/${TELEGRAM_BOT_NAME}?text=Bonjour JOEL!`
+  : null;
+const hasTelegram = TELEGRAM_BOT_NAME != null;
+
+const matrixLinkBase = MATRIX_BOT_USERNAME
+  ? `https://matrix.to/#/@${MATRIX_BOT_USERNAME}`
+  : null;
+const hasMatrix = MATRIX_BOT_USERNAME != null;
+
+const tchapLinkBase = TCHAP_BOT_USERNAME
+  ? `https://www.tchap.gouv.fr/#/@${TCHAP_BOT_USERNAME}`
+  : null;
+const hasTchap = TCHAP_BOT_USERNAME != null;
+
+const signalLinkBase = null;
+const hasSignal = false;
+
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+if (!hasTelegram && !hasWhatsapp && !hasMatrix && !hasTchap && !hasSignal) {
+  throw new Error(
+    "Missing messenger configuration. Set TELEGRAM_BOT_NAME, WHATSAPP_PHONE_NUMBER, MATRIX_BOT_USERNAME or TCHAP_BOT_USERNAME environment variables.",
+  );
 }
 
-if (TELEGRAM_BOT_NAME === undefined || WHATSAPP_PHONE_NUMBER === undefined) {
-  throw new Error(
-    "Missing TELEGRAM_BOT_NAME or WHATSAPP_PHONE_NUMBER environment variables",
-  );
+if (
+  process.env.NODE_ENV !== "development" &&
+  (process.env.UMAMI_HOST === undefined || process.env.UMAMI_ID === undefined)
+) {
+  throw new Error("UMAMI env not set");
 }
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CHOOSE_PAGE_CONTENT = await fs.readFile(
-  path.join(__dirname, "choose.html"),
+const INDEX_PAGE_CONTENT = await fs.readFile(
+  path.join(__dirname, "main.html"),
   "utf8",
 );
 
-const APP_URL = `http://${APP_DOMAIN}`;
+const WHATSAPP_BLOCK = `<div class="rounded-md shadow">
+                  <a
+                    id="wa-link"
+                    class="app"
+                    href="{WHATSAPP_LINK}"
+                    aria-label="WhatsApp"
+                  >
+                    <img
+                      src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"
+                      alt=""
+                      class="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      draggable="false"
+                    />
+                  </a>
+                </div>`;
+
+const TELEGRAM_BLOCK = `<div class="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
+                  <a
+                    id="tg-link"
+                    class="app"
+                    href="{TELEGRAM_LINK}"
+                    aria-label="Telegram"
+                  >
+                    <img
+                      src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
+                      alt=""
+                      class="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      draggable="false"
+                    />
+                  </a>
+                </div>`;
+
+const MATRIX_BLOCK = ` <div class="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
+                  <a
+                    id="mx-link"
+                    class="app"
+                    href="{MATRIX_LINK}"
+                    aria-label="Matrix"
+                  >
+                    <img
+                      src="https://upload.wikimedia.org/wikipedia/commons/1/13/Element_%28software%29_logo_%282024%29.svg"
+                      alt=""
+                      class="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      draggable="false"
+                    />
+                  </a>
+                </div>`;
+
+const TCHAP_BLOCK = `<div class="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
+                  <a
+                    id="tc-link"
+                    class="app"
+                    href="{TCHAP_LINK}"
+                    aria-label="Tchap"
+                  >
+                    <img
+                      src="https://www.tchap.gouv.fr/themes/tchap/img/logos/tchap-logo.svg"
+                      alt=""
+                      class="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      draggable="false"
+                    />
+                  </a>
+                </div>`;
+
+const APP_URL_QR = APP_URL + "/qrcode";
+
 const FRAME_PATH = path.join(__dirname, "frame.png");
+const FONT_PATH = path.join(__dirname, "DejaVuSans-Bold.ttf");
+const FONT_BASE64 = await fs.readFile(FONT_PATH, { encoding: "base64" });
+const FONT_FAMILY = "JoelSans";
+
+const FONTCONFIG_FILE_PATH = path.join(__dirname, "fontconfig.conf");
+if (process.env.FONTCONFIG_FILE === undefined) {
+  try {
+    await fs.access(FONTCONFIG_FILE_PATH);
+  } catch {
+    const fontConfig = `<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <dir>${path.dirname(
+      FONT_PATH,
+    )}</dir>\n</fontconfig>\n`;
+    await fs.writeFile(FONTCONFIG_FILE_PATH, fontConfig, "utf8");
+  }
+  process.env.FONTCONFIG_FILE = FONTCONFIG_FILE_PATH;
+}
 
 app.use(express.static(path.join(__dirname)));
 
@@ -64,7 +198,7 @@ app.get("/qrcode", async (req, res) => {
         .json({ error: "Cannot use fixed size and frame at the same tile." });
 
     // Verify on JORFSearch before generation
-    let verifyOnJORFSearch = false;
+    let verifyOnJORFSearch = true;
     if (req.query.verify != undefined)
       verifyOnJORFSearch = Boolean(req.query.verify);
 
@@ -74,7 +208,7 @@ app.get("/qrcode", async (req, res) => {
     // name for people
     const name = (req.query.name ?? "") as string;
     if (name.length > 0) {
-      if (name.split(" ").length > 2)
+      if (name.split(" ").length < 2)
         return res.status(400).json({
           error:
             "Name parameter must be composed two words minimum: firstname lastname.",
@@ -83,8 +217,8 @@ app.get("/qrcode", async (req, res) => {
     }
 
     // organisation
-    const organisation = (req.query.organisation ?? "") as string;
-    if (organisation.length > 0) {
+    const organisation_id = (req.query.organisation_id ?? "") as string;
+    if (organisation_id.length > 0) {
       if (followType != undefined)
         return res.status(400).json({
           error:
@@ -105,12 +239,6 @@ app.get("/qrcode", async (req, res) => {
       followType = "function_tag";
     }
 
-    if (followType == undefined)
-      return res.status(400).json({
-        error:
-          "One of people, function_tag and organisations must be provided.",
-      });
-
     let followLabel;
     let qr_url;
     switch (followType) {
@@ -119,28 +247,36 @@ app.get("/qrcode", async (req, res) => {
         if (verifyOnJORFSearch) {
           const JORFResult = await callJORFSearchPeople(name);
           if (JORFResult.length === 0)
-            return res
-              .status(400)
-              .json({ error: "No result found on JORFSearch." });
+            return res.status(400).json({
+              error: `No result found on JORFSearch for person "${name}".`,
+            });
           prenomNom = `${JORFResult[0].prenom} ${JORFResult[0].nom}`;
         }
-        qr_url = encodeURI(`${APP_URL}/choose?name=${prenomNom}`);
+        qr_url = `${APP_URL}?name=${prenomNom}`;
         followLabel = prenomNom;
         break;
       }
 
       case "organisation": {
-        const JORFResult = await callJORFSearchOrganisationName(organisation);
-        if (JORFResult.length === 0)
-          return res
-            .status(400)
-            .json({ error: "No result found on JORFSearch." });
-        if (JORFResult.length > 1)
-          return res
-            .status(400)
-            .json({ error: "Too many results found on JORFSearch." });
-        qr_url = encodeURI(`${APP_URL}/choose?&organisation=${organisation}`);
-        followLabel = JORFResult[0].name;
+        if (!verifyOnJORFSearch && !organisation_id.startsWith("Q"))
+          return res.status(400).json({
+            error:
+              "Verification is mandatory when fetching organisation with WikidataId.",
+          });
+        if (verifyOnJORFSearch) {
+          const JORFResult =
+            await callJORFSearchOrganisationByWikidataId(organisation_id);
+          if (JORFResult.length === 0)
+            return res.status(400).json({
+              error: `No result found on JORFSearch for organisation "${organisation_id}".`,
+            });
+          if (JORFResult.length > 1)
+            return res
+              .status(400)
+              .json({ error: "Too many results found on JORFSearch." });
+          qr_url = `${APP_URL}?&organisation=${organisation_id}`;
+          followLabel = JORFResult[0].name;
+        }
         break;
       }
 
@@ -152,23 +288,23 @@ app.get("/qrcode", async (req, res) => {
               .status(400)
               .json({ error: "No result found on JORFSearch." });
         }
-        qr_url = encodeURI(`${APP_URL}/choose?&function_tag=${function_tag}`);
+        qr_url = `${APP_URL}?&function_tag=${function_tag}`;
         followLabel = function_tag;
+        // TODO: functionTag to label
         break;
       }
     }
+    if (!qr_url)
+      return res.status(400).json({
+        error: "qr_url not initialized",
+      });
 
-    const qrBuffer = await QRCode.toBuffer(qr_url, {
-      width: qr_code_size,
-      margin: 1,
-      color: { dark: "#000000", light: "#ffffff" },
-    });
+    const qrBuffer = await generateQrWithLogo(qr_url);
 
     res.set("Content-Type", "image/png");
 
     if (!frameEnabled) {
       res.send(qrBuffer);
-      console.log("QR code generated successfully.");
       return;
     }
 
@@ -184,15 +320,28 @@ app.get("/qrcode", async (req, res) => {
     const textSvg = `
     <svg width="${String(frameW)}" height="${String(FONT_SIZE * 3)}"
          viewBox="0 0 ${String(frameW)} ${String(FONT_SIZE * 3)}" xmlns="http://www.w3.org/2000/svg">
-      <style>
-        .label { font-family: Helvetica, Arial, sans-serif;
-                 font-weight: 700;
-                 font-size: ${String(FONT_SIZE)};
-                 fill: ${TEXT_COLOR}; }
-      </style>
+      <defs>
+        <style>
+          @font-face {
+            font-family: '${FONT_FAMILY}';
+            src: url('data:font/ttf;base64,${FONT_BASE64}') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+          }
 
-      <text x="50%" y="70%" dominant-baseline="middle" text-anchor="middle" class="label">
-        ${followLabel}
+          .label {
+            font-family: '${FONT_FAMILY}', sans-serif;
+            font-weight: 700;
+            font-size: ${String(FONT_SIZE)};
+            fill: ${TEXT_COLOR};
+          }
+        </style>
+      </defs>
+
+      <text x="50%" y="70%" dominant-baseline="middle" text-anchor="middle" class="label" ${
+        followLabel ? "" : 'style="display: none;"'
+      }>
+        ${followLabel ?? ""}
       </text>
     </svg>`;
     const textBuffer = Buffer.from(textSvg);
@@ -211,13 +360,13 @@ app.get("/qrcode", async (req, res) => {
 
     switch (followType) {
       case "people":
-        await umami.log({ event: "/qrcode-people" });
+        await umami.log({ event: "/qr-people" });
         break;
       case "organisation":
-        await umami.log({ event: "/qrcode-organisation" });
+        await umami.log({ event: "/qr-organisation" });
         break;
       case "function_tag":
-        await umami.log({ event: "/qrcode-tag" });
+        await umami.log({ event: "/qr-tag" });
         break;
     }
   } catch (err) {
@@ -226,23 +375,19 @@ app.get("/qrcode", async (req, res) => {
   }
 });
 
-app.get("/choose", async (req, res) => {
+app.get("/", async (req, res) => {
   try {
-    let content = CHOOSE_PAGE_CONTENT;
-
-    const paramsNames = ["name", "organisation", "people", "verify"];
-
-    const paramsWithValues: string[] = [];
-    paramsNames.forEach((param) => {
-      const paramValue = (req.query[param] ?? "") as string;
-      if (paramValue.length > 0)
-        paramsWithValues.push(`${param}=${paramValue}`);
-    });
-    paramsWithValues.push("frame=false");
+    let content = INDEX_PAGE_CONTENT;
 
     let followType: FollowType | undefined;
-    let followArg = ""; // to be sent to the start command
-    let followLabel = ""; // visually shown on the page to the user
+    let followArg = null; // to be sent to the start command
+    let followLabel = null;
+
+    let qr_url: string | null = null;
+
+    let verifyOnJORFSearch = true;
+    if (req.query.verify != undefined)
+      verifyOnJORFSearch = Boolean(req.query.verify);
 
     if (req.query.name != undefined) {
       followArg = req.query.name as string;
@@ -252,27 +397,49 @@ app.get("/choose", async (req, res) => {
             "Name parameter must be composed two words minimum: firstname lastname.",
         });
       followType = "people";
+
+      if (verifyOnJORFSearch) {
+        const JORFResult = await callJORFSearchPeople(followArg);
+        if (JORFResult.length === 0)
+          return res.status(400).json({
+            error: `No result found on JORFSearch for person "${followArg}".`,
+          });
+        followArg = `${JORFResult[0].prenom} ${JORFResult[0].nom}`;
+        qr_url = APP_URL_QR + "?name=" + followArg;
+      }
       followLabel = followArg;
     }
 
-    if (req.query.organisation != undefined) {
-      followArg = req.query.organisation as string;
+    if (req.query.organisation_id != undefined) {
+      followArg = (req.query.organisation_id as string).toUpperCase();
       if (followType != undefined)
         return res.status(400).json({
           error:
             "Parameters people, function_tag and organisations are exclusive.",
         });
+      if (!verifyOnJORFSearch && followArg.startsWith("Q")) {
+        return res.status(400).json({
+          error:
+            "Verification is mandatory when fetching organisation with WikidataId.",
+        });
+      }
+      if (verifyOnJORFSearch) {
+        const JORFResult =
+          await callJORFSearchOrganisationByWikidataId(followArg);
+        if (JORFResult.length === 0)
+          return res.status(400).json({
+            error: `No result found on JORFSearch for organisation "${followArg}".`,
+          });
+        if (JORFResult.length > 1)
+          return res
+            .status(400)
+            .json({ error: "Too many results found on JORFSearch." });
+        followArg = JORFResult[0].id;
+        followLabel = JORFResult[0].name;
+      }
       followType = "organisation";
-      const JORFResult = await callJORFSearchOrganisationName(followArg);
-      if (JORFResult.length === 0)
-        return res
-          .status(400)
-          .json({ error: "No result found on JORFSearch." });
-      if (JORFResult.length > 1)
-        return res
-          .status(400)
-          .json({ error: "Too many results found on JORFSearch." });
-      followLabel = JORFResult[0].name;
+
+      qr_url = APP_URL_QR + "?organisation=" + followArg;
     }
 
     if (req.query.function_tag != undefined) {
@@ -282,22 +449,48 @@ app.get("/choose", async (req, res) => {
           error:
             "Parameters people, function_tag and organisations are exclusive.",
         });
+      if (verifyOnJORFSearch) {
+        const JORFResult = await callJORFSearchTag(followArg);
+        if (JORFResult.length === 0)
+          return res
+            .status(400)
+            .json({ error: "No result found on JORFSearch." });
+      }
       followType = "function_tag";
-      followLabel = followArg; // TODO: replace by a cleaner tag name
+      qr_url = APP_URL_QR + "?function_tag=" + followArg;
+      // TODO: functionTag to label
     }
 
-    const isMobile =
+    // Hide the QR code if already on mobile
+    let isMobile =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
         req.get("user-agent") ?? "",
       );
 
-    content = content.replace(
-      "{QR_URL}",
-      `${APP_URL}/qrcode?${encodeURI(paramsWithValues.join("&"))}`,
-    );
+    if (!qr_url) {
+      if (isDev) {
+        isMobile = true;
+        followLabel = "Sample label";
+      } else {
+        res.redirect(encodeURI(HOME_WEBSITE_URL));
+        return;
+      }
+    }
 
-    // Hide the QR code if already on mobile
-    content = content.replace("{HIDDEN_QR}", isMobile ? "hidden" : "");
+    if (!isMobile && qr_url)
+      content = content.replace(
+        "{QRCODE_BLOCK}",
+        `
+          <div
+              class="max-w-md mx-auto mt-5 sm:flex sm:justify-center md:mt-8"
+          >
+          <img id="qrcode" class="qrcode" alt="QR code" src=${encodeURI(qr_url + "&frame=false")} />
+              </div>`,
+      );
+    else content = content.replace("{QRCODE_BLOCK}", "");
+
+    if (followLabel == null)
+      return res.status(400).json({ error: "Follow label not found." });
 
     // Show the display name
     content = content.replace("{FOLLOW_LABEL}", followLabel);
@@ -305,48 +498,167 @@ app.get("/choose", async (req, res) => {
     // Show the display name
     content = content.replace("{BASE_URL}", APP_URL);
 
-    const telegram_base_URL = `https://t.me/${TELEGRAM_BOT_NAME}?text=`;
-    const whatsapp_base_URL = `https://wa.me/${WHATSAPP_PHONE_NUMBER}?text=Bonjour JOEL! `;
+    content = content.replace(
+      "{PAGE_TITLE}",
+      followArg
+        ? PAGE_TITLE_WITH_NAME.replace("{NAME}", followArg)
+        : PAGE_TITLE_DEFAULT,
+    );
 
-    let startCommand = "";
+    let startCommand = null;
 
+    followArg ??= ""; // for the TypeScript check only
     switch (followType) {
       case "people":
-        startCommand = "Suivre " + followArg;
-        await umami.log({ event: "/gateway-people" });
+        startCommand = "Rechercher " + followArg;
+        await umami.log({ event: "/link-people" });
         break;
       case "organisation":
         startCommand = "SuivreO " + followArg;
-        await umami.log({ event: "/gateway-organisation" });
+        await umami.log({ event: "/link-organisation" });
         break;
       case "function_tag":
         startCommand = "SuivreF " + followArg;
-        await umami.log({ event: "/gateway-tag" });
+        await umami.log({ event: "/link-tag" });
         break;
+
+      default:
+        await umami.log({ event: "/link-default" });
+        res.redirect(encodeURI("https://" + HOME_WEBSITE_URL));
+        return;
     }
 
+    const smoothFlowCommand = startCommand.replace("Suivre", "Rechercher"); // flow is prettier with "Rechercher"
+
     content = content.replace(
-      "{WHATSAPP_LINK}",
-      encodeURI(whatsapp_base_URL + startCommand),
+      "{WHATSAPP_BLOCK}",
+      hasWhatsapp ? WHATSAPP_BLOCK : "",
     );
     content = content.replace(
-      "{TELEGRAM_LINK}",
-      encodeURI(telegram_base_URL + startCommand.replace("Suivre", "Rechercher") // flow is prettier with "Rechercher"
-      ),
+      "{TELEGRAM_BLOCK}",
+      hasTelegram ? TELEGRAM_BLOCK : "",
     );
+    content = content.replace("{MATRIX_BLOCK}", hasMatrix ? MATRIX_BLOCK : "");
+
+    content = content.replace("{TCHAP_BLOCK}", hasTchap ? TCHAP_BLOCK : "");
+
+    if (whatsappLinkBase) {
+      const whatsappLink = encodeURI(
+        `${whatsappLinkBase} ${smoothFlowCommand}`,
+      );
+      content = content.replace("{WHATSAPP_LINK}", whatsappLink);
+    }
+
+    if (telegramLinkBase) {
+      const telegramLink = encodeURI(
+        `${telegramLinkBase} ${smoothFlowCommand}`,
+      );
+      content = content.replace("{TELEGRAM_LINK}", telegramLink);
+    }
+
+    if (matrixLinkBase) {
+      content = content.replace("{MATRIX_LINK}", matrixLinkBase);
+    }
+
+    if (tchapLinkBase) {
+      content = content.replace("{TCHAP_LINK}", tchapLinkBase);
+    }
 
     res.type("html").send(content);
   } catch (err) {
     console.error("QR API error:", err);
-    res.status(500).json({ error: "QR code generation failed." });
+    res.status(500).json({ error: "Page generation failed." });
   }
 });
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+app.get("/whatsapp", (req, res) => {
+  if (whatsappLinkBase == null) {
+    res.redirect(HOME_WEBSITE_URL);
+    return;
+  }
+  res.redirect(encodeURI(whatsappLinkBase));
+});
+
+app.get("/matrix", (req, res) => {
+  if (matrixLinkBase == null) {
+    res.redirect(HOME_WEBSITE_URL);
+    return;
+  }
+  res.redirect(encodeURI(matrixLinkBase));
+});
+
+app.get("/tchap", (req, res) => {
+  if (tchapLinkBase == null) {
+    res.redirect(HOME_WEBSITE_URL);
+    return;
+  }
+  res.redirect(encodeURI(tchapLinkBase));
+});
+
+app.get("/telegram", (req, res) => {
+  if (telegramLinkBase == null) {
+    res.redirect(HOME_WEBSITE_URL);
+    return;
+  }
+  res.redirect(encodeURI(telegramLinkBase));
+});
+
+app.get("/signal", (req, res) => {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (signalLinkBase == null) {
+    res.redirect(HOME_WEBSITE_URL);
+    return;
+  }
+  res.redirect(encodeURI(signalLinkBase));
+});
+
+app.get("/status", (req, res) => {
+  res.type("text/plain").send("JOEL QR server is running.");
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 App running at APP_URL`);
-  console.log(`📱 Try: ${APP_URL}/qrcode`);
+  console.log(`📱 Try: ${APP_URL}`);
 });
+
+console.log(`QR: JOEL gateway started successfully \u{2705}`);
+
+async function generateQrWithLogo(
+  qr_url: string,
+  {
+    qrSize = 600,
+    margin = 1,
+    dark = "#000000",
+    light = "#ffffff",
+    logoPath = path.resolve(__dirname, "logo_round.png"),
+    logoScale = 0.45, // slightly smaller without a white plate
+  } = {},
+) {
+  // 1) QR buffer
+  const qrBuffer = await QRCode.toBuffer(encodeURI(qr_url), {
+    errorCorrectionLevel: "H",
+    type: "png",
+    width: qrSize,
+    margin,
+    color: { dark, light },
+  });
+
+  // 2) Transparent logo buffer at target size (keep alpha!)
+  const targetLogoWidth = Math.floor(qrSize * logoScale);
+  const logoBuf = await sharp(logoPath)
+    .resize({ width: targetLogoWidth, fit: "inside" })
+    .png() // preserve transparency
+    .toBuffer();
+
+  const logoMeta = await sharp(logoBuf).metadata();
+
+  // 3) Center the logo directly onto the QR
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const left = Math.floor((qrSize - logoMeta.width!) / 2);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const top = Math.floor((qrSize - logoMeta.height!) / 2);
+
+  return await sharp(qrBuffer)
+    .composite([{ input: logoBuf, left, top }]) // no background
+    .png()
+    .toBuffer();
+}
