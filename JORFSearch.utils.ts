@@ -128,7 +128,7 @@ export function cleanPeopleNameJORFURL(input: string): string {
   return out;
 }
 
-export async function callJORFSearchOrganisationName(
+export async function callJORFSearchOrganisationByWikidataId(
   wikidataId: WikidataId,
 ): Promise<{ name: string; id: WikidataId }[]> {
   try {

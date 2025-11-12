@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>JOEL - Journal Electronique</title>
+    <title>{PAGE_TITLE}</title>
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 
@@ -80,10 +80,11 @@
     <img id="qrcode" class="qrcode" alt="QR code" src="{QR_URL}" {HIDDEN_QR} />
 
     <h1 id="title">
-      Ouvrez votre application de messagerie préférée pour suivre {FOLLOW_LABEL}
+        {FOLLOW_LABEL}
     </h1>
 
     <div class="apps">
+      {TCHAP_BLOCK}
       {WHATSAPP_BLOCK}
       {TELEGRAM_BLOCK}
       {MATRIX_BLOCK}
