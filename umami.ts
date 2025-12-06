@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const log = async (args: { event: UmamiEvent; data?: object }) => {
+export const log = (args: { event: UmamiEvent; data?: object }) => {
   if (process.env.NODE_ENV === "development") {
     console.log("Umami event", args.event);
     return;
@@ -23,11 +23,9 @@ export const log = async (args: { event: UmamiEvent; data?: object }) => {
     },
   };
 
-  try {
-    await axios.post(endpoint, payload, options);
-  } catch (error) {
+  void axios.post(endpoint, payload, options).catch((error) => {
     console.log(error);
-  }
+  });
 };
 
 export default {

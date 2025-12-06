@@ -360,13 +360,13 @@ app.get("/qrcode", async (req, res) => {
 
     switch (followType) {
       case "people":
-        await umami.log({ event: "/qr-people" });
+        void umami.log({ event: "/qr-people" });
         break;
       case "organisation":
-        await umami.log({ event: "/qr-organisation" });
+        void umami.log({ event: "/qr-organisation" });
         break;
       case "function_tag":
-        await umami.log({ event: "/qr-tag" });
+        void umami.log({ event: "/qr-tag" });
         break;
     }
   } catch (err) {
@@ -511,19 +511,19 @@ app.get("/", async (req, res) => {
     switch (followType) {
       case "people":
         startCommand = "Rechercher " + followArg;
-        await umami.log({ event: "/link-people" });
+        void umami.log({ event: "/link-people" });
         break;
       case "organisation":
         startCommand = "SuivreO " + followArg;
-        await umami.log({ event: "/link-organisation" });
+        void umami.log({ event: "/link-organisation" });
         break;
       case "function_tag":
         startCommand = "SuivreF " + followArg;
-        await umami.log({ event: "/link-tag" });
+        void umami.log({ event: "/link-tag" });
         break;
 
       default:
-        await umami.log({ event: "/link-default" });
+        void umami.log({ event: "/link-default" });
         res.redirect(encodeURI("https://" + HOME_WEBSITE_URL));
         return;
     }
